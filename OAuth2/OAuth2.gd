@@ -1,14 +1,14 @@
 extends Control
 
 
+const client_secret := ""
+const client_ID := ""
+const auth_server := "https://www.patreon.com/oauth2/authorize"
+const token_req := "https://www.patreon.com/api/oauth2/token"
+
 const PORT := 31419
 const BINDING := "127.0.0.1"
-const client_secret := "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"
-const client_ID := "694582530887-nlpff7b0vnho1jop7ffofdldkkm9ibu7.apps.googleusercontent.com"
-const auth_server := "https://accounts.google.com/o/oauth2/v2/auth"
-const token_req := "https://oauth2.googleapis.com/token"
-
-var redirect_server := TCP_Server.new() # 
+var redirect_server := TCPServer.new() # 
 var redirect_uri := "http://%s:%s" % [BINDING, PORT]
 var token
 var refresh_token
@@ -21,10 +21,10 @@ func _ready():
 
 
 func authorize():
-	load_tokens()
+	#load_tokens()
 	
-	if !yield(is_token_valid(), "completed"):
-		if !yield(refresh_tokens(), "completed"):
+	if !await is_token_valid():
+		if !await refresh_tokens():
 			get_auth_code()
 
 
@@ -37,8 +37,8 @@ func _process(_delta):
 			var auth_code = request.split("&scope")[0].split("=")[1]
 			get_token_from_auth(auth_code)
 			
-			connection.put_data(("HTTP/1.1 %d\r\n" % 200).to_ascii())
-			connection.put_data(load_HTML("res://OAuth2/display_page.html").to_ascii())
+			connection.put_data(("HTTP/1.1 %d\r\n" % 200).to_ascii_buffer())
+			connection.put_data(load_HTML("res://OAuth2/display_page.html").to_ascii_buffer())
 			redirect_server.stop()
 
 func get_auth_code():
@@ -47,13 +47,14 @@ func get_auth_code():
 	var redir_err = redirect_server.listen(PORT, BINDING)
 	
 	var body_parts = [
+		"response_type=code",
 		"client_id=%s" % client_ID,
 		"redirect_uri=%s" % redirect_uri,
-		"response_type=code",
-		"scope=https://www.googleapis.com/auth/youtube.readonly",
+		"scope=identity%20identity.memberships",
+		"allow_signup=false",
 	]
-	var url = auth_server + "?" + PoolStringArray(body_parts).join("&")
-	
+	var url = auth_server + "?" + "&".join(PackedStringArray(body_parts))
+	print(redirect_uri)
 # warning-ignore:return_value_discarded
 	OS.shell_open(url) # Opens window for user authentication
 
@@ -61,9 +62,10 @@ func get_auth_code():
 func get_token_from_auth(auth_code):
 	
 	var headers = [
-		"Content-Type: application/x-www-form-urlencoded"
+		"Content-Type: application/x-www-form-urlencoded",
+		"accept: application/json"
 	]
-	headers = PoolStringArray(headers)
+	headers = PackedStringArray(headers)
 	
 	var body_parts = [
 		"code=%s" % auth_code, 
@@ -73,25 +75,50 @@ func get_token_from_auth(auth_code):
 		"grant_type=authorization_code"
 	]
 	
-	var body = PoolStringArray(body_parts).join("&")
+	var body = "&".join(PackedStringArray(body_parts))
 	
 # warning-ignore:return_value_discarded
 	var http_request = HTTPRequest.new()
 	add_child(http_request)
 	
-	var error = http_request.request(token_req, headers, true, HTTPClient.METHOD_POST, body)
+	var error = http_request.request(token_req, headers, HTTPClient.METHOD_POST, body)
 	if error != OK:
 		push_error("An error occurred in the HTTP request with ERR Code: %s" % error)
 	
-	var response = yield(http_request, "request_completed")
-	var response_body = parse_json(response[3].get_string_from_utf8())
+	var response = await http_request.request_completed
+	var test_json_conv = JSON.new()
+	test_json_conv.parse(response[3].get_string_from_utf8())
+	var response_body = test_json_conv.get_data()
 
 	token = response_body["access_token"]
 	refresh_token = response_body["refresh_token"]
 	
-	save_tokens()
+	#save_tokens()
+	
+	get_channel_info(token)
 	emit_signal("token_recieved")
 
+func get_channel_info(token):
+	var http_request = HTTPRequest.new()
+	add_child(http_request)
+	
+	var request_url := "https://www.patreon.com/api/oauth2/v2/identity?include=memberships.campaign&fields%5Bmember%5D=patron_status"
+	var headers := [
+		"Authorization: Bearer %s" % token,
+		"Accept: application/json"
+	]
+	
+	var error = http_request.request(request_url, PackedStringArray(headers))
+	if error != OK:
+		push_error("ERROR OCCURED @ FUNC get_LiveBroadcastResource() : %s" % error)
+		http_request.queue_free()
+	
+	var response = await http_request.request_completed
+	var test_json_conv = JSON.new()
+	test_json_conv.parse(response[3].get_string_from_utf8())
+	var response_body = test_json_conv.get_data()
+	
+	print(response_body)
 
 func refresh_tokens():
 	print("refreshing")
@@ -105,24 +132,26 @@ func refresh_tokens():
 		"refresh_token=%s" % refresh_token,
 		"grant_type=refresh_token"
 	]
-	var body = PoolStringArray(body_parts).join("&")
+	var body = "&".join(PackedStringArray(body_parts))
 	
 # warning-ignore:return_value_discarded
 	var http_request = HTTPRequest.new()
 	add_child(http_request)
 	
-	var error = http_request.request(token_req, headers, true, HTTPClient.METHOD_POST, body)
+	var error = http_request.request(token_req, headers, HTTPClient.METHOD_POST, body)
 
 	if error != OK:
 		push_error("An error occurred in the HTTP request with ERR Code: %s" % error)
 	
-	var response = yield(http_request, "request_completed")
+	var response = await http_request.request_completed
 	
-	var response_body = parse_json(response[3].get_string_from_utf8())
+	var test_json_conv = JSON.new()
+	test_json_conv.parse(response[3].get_string_from_utf8())
+	var response_body = test_json_conv.get_data()
 	
 	if response_body.get("access_token"):
 		token = response_body["access_token"]
-		save_tokens()
+		#save_tokens()
 		print("token refreshed")
 		emit_signal("token_recieved")
 		return true
@@ -132,7 +161,7 @@ func refresh_tokens():
 
 func is_token_valid() -> bool:
 	if !token:
-		yield(get_tree().create_timer(0.001), "timeout")
+		await get_tree().create_timer(0.001).timeout
 		return false
 	
 	var headers = [
@@ -144,13 +173,15 @@ func is_token_valid() -> bool:
 	var http_request = HTTPRequest.new()
 	add_child(http_request)
 	
-	var error = http_request.request(token_req + "info", headers, true, HTTPClient.METHOD_POST, body)
+	var error = http_request.request(token_req + "info", headers, HTTPClient.METHOD_POST, body)
 	if error != OK:
 		push_error("An error occurred in the HTTP request with ERR Code: %s" % error)
 	
-	var response = yield(http_request, "request_completed")
+	var response = await http_request.request_completed
 	
-	var expiration = parse_json(response[3].get_string_from_utf8()).get("expires_in")
+	var test_json_conv = JSON.new()
+	test_json_conv.parse(response[3].get_string_from_utf8())
+	var expiration = test_json_conv.get_data()
 	
 	if expiration and int(expiration) > 0:
 		print(expiration)
@@ -167,13 +198,14 @@ var save_path = SAVE_DIR + 'token.dat'
 
 
 func save_tokens():
-	var dir = Directory.new()
-	if !dir.dir_exists(SAVE_DIR):
+	var createDir = DirAccess.make_dir_absolute(SAVE_DIR)
+	var dir = DirAccess.open(SAVE_DIR)
+	if !dir:
 		dir.make_dir_recursive(SAVE_DIR)
 	
-	var file = File.new()
-	var error = file.open_encrypted_with_pass(save_path, File.WRITE, 'abigail')
-	if error == OK:
+	var file = FileAccess.open(save_path, FileAccess.WRITE)
+	var error = file.open_encrypted_with_pass(save_path, FileAccess.WRITE, 'abigail')
+	if error != null:
 		var tokens = {
 			"token" : token,
 			"refresh_token" : refresh_token
@@ -183,10 +215,10 @@ func save_tokens():
 
 
 func load_tokens():
-	var file = File.new()
-	if file.file_exists(save_path):
-		var error = file.open_encrypted_with_pass(save_path, File.READ, 'abigail')
-		if error == OK:
+	var file = FileAccess.open(save_path, FileAccess.READ)
+	if file:
+		var error = file.open_encrypted_with_pass(save_path, FileAccess.READ, 'abigail')
+		if error != null:
 			var tokens = file.get_var()
 			token = tokens.get("token")
 			refresh_token = tokens.get("refresh_token")
@@ -195,9 +227,9 @@ func load_tokens():
 
 
 func load_HTML(path):
-	var file = File.new()
-	if file.file_exists(path):
-		file.open(path, File.READ)
+	var file = FileAccess.open(path, FileAccess.READ)
+	if file:
+		file.open(path, FileAccess.READ)
 		var HTML = file.get_as_text().replace("    ", "\t").insert(0, "\n")
 		file.close()
 		return HTML

@@ -1,0 +1,14 @@
+ea4bc82a6ad023ab7ee23ee620429895
+::res://::1729979633
+default_env.tres::Environment::7044810967989437239::1729979390::0::1::::<><>::
+DroidSans-Bold.ttf::FontFile::8478614425650732297::1729959791::1729959864::1::::<><>::
+export_presets.cfg::TextFile::-1::1729959791::0::1::::<><>::
+icon.png::CompressedTexture2D::3071921897866329573::1729959791::1729959864::1::::<><>::
+README.md::TextFile::-1::1729959791::0::1::::<><>::
+site_light.png::CompressedTexture2D::3632404062621851799::1729979633::1729979633::1::::<><>::
+YouTubeData.gd::GDScript::-1::1729979120::0::1::::<>Node<>::
+::res://OAuth2/::1729979390
+OAuth2.gd::GDScript::-1::1729979389::0::1::::<>Control<>::
+OAuth2.tscn::PackedScene::3848837700465904866::1729979390::0::1::::<><>::res://OAuth2/OAuth2Example.gd<>uid://bphlaim1tcajm::::res://OAuth2/signin-button.png<>uid://ds2dsnhsrxcjh::::res://DroidSans-Bold.ttf
+OAuth2Example.gd::GDScript::-1::1729968228::0::1::::<>Control<>::
+signin-button.png::CompressedTexture2D::3454372309393680830::1729959791::1729959864::1::::<><>::

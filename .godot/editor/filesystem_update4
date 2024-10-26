@@ -1,0 +1,5 @@
+res://default_env.tres
+res://OAuth2/OAuth2.tscn
+res://OAuth2/OAuth2.gd
+res://OAuth2/OAuth2Example.gd
+res://YouTubeData.gd
